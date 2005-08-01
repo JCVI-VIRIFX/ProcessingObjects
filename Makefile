@@ -6,7 +6,7 @@
 
 CURDIR      = .
 INSTALLDIR  = /usr/local/reseq/data_analysis/ProcessingObjects
-INSBINDIR   = $(INSTALLDIR)/bin
+INSBINDIR   = $(INSTALLDIR)/
 INSLIBDIR   = $(INSTALLDIR)/lib
 INSETCDIR   = $(INSTALLDIR)/etc
 INSDOCDIR   = $(INSTALLDIR)/doc
@@ -14,3 +14,4 @@ INSDOCDIR   = $(INSTALLDIR)/doc
 install:
 	@mkdir -p $(INSBINDIR)
 	@cp Metrics.pm $(INSBINDIR)/
+	@cp ../../primer_design/PrimerDesigner/LIMSTools/WriteXML.pm $(INSBINDIR)
