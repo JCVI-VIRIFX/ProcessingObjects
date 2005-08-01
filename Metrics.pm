@@ -74,15 +74,25 @@ sub new{
 	my $sequencing_dir = $data_dir."/".$config{'Target_Info'}{'target_sequencing_dir_name'};
 	my $manifest_dir = $sequencing_dir."/".$config{'Target_Info'}{'target_manifest_dir_name'};
 	my $manifest_files = $manifest_dir."/".$config{'Manifest_Info'}{'manifest_query_file'}.".txt";
+	my @pda_list = split(",", $config{'PrimerDesign_Info'}{'source_dir_root'});
 
-	my $pda_fasta = `ls -1 $data_dir/$config{'PrimerDesign_Info'}{'primer_design_dir_name'}/*/*/$object->{'gene'}/$config{'PrimerDesign_Info'}{'reference_amplicons_dir_name'}/$object->{'amplicon'}.fasta`;	
-	chomp($pda_fasta);
-	$pda_fasta =~ m/($config{'PrimerDesign_Info'}{'primer_design_dir_name'})(\S+)($object->{'gene'})\//;
-	my $amplicons_dir = $primer_design_dir.$2.$object->{'gene'};
+	my $pda_fasta = my $amplicons_dir = '';
 	
-	$object->{'pda_no_primers_fasta'} = `ls -1 $data_dir/$config{'PrimerDesign_Info'}{'primer_design_dir_name'}/*/*/$object->{'gene'}/$config{'PrimerDesign_Info'}{'reference_amplicons_dir_name'}/$object->{'amplicon'}_no_primers.fasta | tail -1`;
-	chomp($object->{'pda_no_primers_fasta'});
-	$object->{'pda_no_primers_length'} = `$config{'Emboss_Tools'}{'infoseq_exe'} $object->{'pda_no_primers_fasta'} -only -length`;
+	foreach my $dir (@pda_list){
+	    $pda_fasta = `ls -1 $dir/*/*/$object->{'gene'}/$config{'PrimerDesign_Info'}{'reference_amplicons_dir_name'}/$object->{'amplicon'}.fasta`;
+	    if($pda_fasta =~ /ls\s+No\s+match\./){
+		next;
+	    }else{
+		chomp($pda_fasta);
+		$pda_fasta =~ m/($dir)(\S+)($object->{'gene'})\//;
+		$amplicons_dir = $dir.$2.$object->{'gene'};
+		$reference_amplicons_dir = $amplicons_dir."/".$config{'PrimerDesign_Info'}{'reference_amplicons_dir_name'};
+		$object->{'pda_no_primers_fasta'} = `ls -1 $dir/*/*/$object->{'gene'}/$config{'PrimerDesign_Info'}{'reference_amplicons_dir_name'}/$object->{'amplicon'}_no_primers.fasta | tail -1`;
+		chomp($object->{'pda_no_primers_fasta'});
+		$object->{'pda_no_primers_length'} = `$config{'Emboss_Tools'}{'infoseq_exe'} $object->{'pda_no_primers_fasta'} -only -length`;
+		last;
+	    }
+	}
 	my $reference_amplicons_dir = $amplicons_dir."/".$config{'PrimerDesign_Info'}{'reference_amplicons_dir_name'};
 	my $reference_amplicons_blastdb = $reference_amplicons_dir ."/".$config{'PrimerDesign_Info'}{'all_amplicons_file'};
 	my $primer_design_report_file = $amplicons_dir."/".$config{'PrimerDesign_Info'}{'primer_info_file'};
@@ -218,8 +228,8 @@ sub getPercentAmpliconCoverage{
     my $metrics_object = shift; 
 
     my $percentAmpliconCoverage = 0;
-    my $num_hsps = `$metrics_object->{'bl2seq'} -p blastn -e 1e-10 -D 1 -i $metrics_object->{'pda_no_primers_fasta'} -j $metrics_object->{'fastafile'} | grep -v "^#" | wc -l`;
-    my @bl2seq_records = `$metrics_object->{'bl2seq'} -p blastn -e 1e-10 -D 1 -i $metrics_object->{'pda_no_primers_fasta'} -j $metrics_object->{'fastafile'} | grep -v "^#"`;
+    my $num_hsps = `$metrics_object->{'bl2seq'} -p blastn -F F -e 1e-10 -D 1 -i $metrics_object->{'pda_no_primers_fasta'} -j $metrics_object->{'fastafile'} | grep -v "^#" | wc -l`;
+    my @bl2seq_records = `$metrics_object->{'bl2seq'} -p blastn -F F -e 1e-10 -D 1 -i $metrics_object->{'pda_no_primers_fasta'} -j $metrics_object->{'fastafile'} | grep -v "^#"`;
 
     if ($num_hsps > 0){
 	my $bl2seq = $direction = "";
