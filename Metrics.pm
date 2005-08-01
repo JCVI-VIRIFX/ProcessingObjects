@@ -120,9 +120,11 @@ sub new{
 	    if( $ztr_file =~ m/forward/){
 		$object->{'ztr_file'} = $object->{'donor'}."_f_".$object->{'amplicon'}."_".$ztr_split[5].".ztr";
 		$object->{'fc'} = 1;
+		$object->{'direction'} = "TF";
 	    }else{
 		$object->{'ztr_file'} = $object->{'donor'}."_r_".$object->{'amplicon'}."_".$ztr_split[5].".ztr";
 		$object->{'fc'} = 0;
+		$object->{'fc'} = "TR";
 	    }
 	    my ($tracefile, $path, $type) = fileparse($object->{'ztr_file'}, ".ztr");
 	    my $traceid = $ztr_split[5];
@@ -221,6 +223,15 @@ sub getDonor{
     my $metrics_object = shift;
     return $metrics_object->{'donor'};
 }
+
+###################################################################
+
+# RETURN THE AMPLICON DIRECTION
+sub getAmpliconDirection{
+    my $metrics_object = shift;
+    return $metrics_object->{'direction'};
+}
+
 ###################################################################
 
 # CALCULATE THE PERCENT OF THE AMPLICON THAT IS COVERED    
