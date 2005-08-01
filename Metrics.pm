@@ -120,11 +120,11 @@ sub new{
 	    if( $ztr_file =~ m/forward/){
 		$object->{'ztr_file'} = $object->{'donor'}."_f_".$object->{'amplicon'}."_".$ztr_split[5].".ztr";
 		$object->{'fc'} = 1;
-		$object->{'direction'} = "TF";
+		$object->{'psym'} = "TF";
 	    }else{
 		$object->{'ztr_file'} = $object->{'donor'}."_r_".$object->{'amplicon'}."_".$ztr_split[5].".ztr";
 		$object->{'fc'} = 0;
-		$object->{'fc'} = "TR";
+		$object->{'psym'} = "TR";
 	    }
 	    my ($tracefile, $path, $type) = fileparse($object->{'ztr_file'}, ".ztr");
 	    my $traceid = $ztr_split[5];
@@ -226,10 +226,10 @@ sub getDonor{
 
 ###################################################################
 
-# RETURN THE AMPLICON DIRECTION
-sub getAmpliconDirection{
+# RETURN THE PRIMER SYMBOL (DIRECTION)
+sub getPSYMDirection{
     my $metrics_object = shift;
-    return $metrics_object->{'direction'};
+    return $metrics_object->{'psym'};
 }
 
 ###################################################################
