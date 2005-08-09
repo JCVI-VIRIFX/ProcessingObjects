@@ -238,7 +238,27 @@ sub getPSYMDirection{
 sub getPercentAmpliconCoverage{
     my $metrics_object = shift; 
 
+    my @ref_start_stutter = ();
+    my $ref_start_stutter = 0;
+    my $i;
+
+   # DETERMINE START STUTTER IN REFERENCE SEQUENCE
+    @ref_start_stutter = `$cfg{'AmpliconHandling_Tools'}{'repeat_detector_exe'} -f $metrics_object->{'pda_no_primers_fasta'} -s 13 -m 22 | grep "^[1-9]" | cut -f 1`;
+    for($i=0; $i<=$#ref_start_stutter; $i++){
+	my $ref_start_stut = $ref_start_stutter[$i];
+	chomp($ref_start_stut);
+	if($ref_start_stut >10){
+	    $ref_start_stutter = $ref_start_stut;
+	    $i = $#ref_start_stutter+1 ;
+	}
+    }
+
     my $percentAmpliconCoverage = 0;
+    my $bases_for_full_coverage = $metrics_object->{'pda_no_primers_length'};
+    if ( $ref_start_stutter > 0 ) {
+      $bases_for_full_coverage = $ref_start_stutter;
+    }
+
     my $num_hsps = `$metrics_object->{'bl2seq'} -p blastn -F F -e 1e-10 -D 1 -i $metrics_object->{'pda_no_primers_fasta'} -j $metrics_object->{'fastafile'} | grep -v "^#" | wc -l`;
     my @bl2seq_records = `$metrics_object->{'bl2seq'} -p blastn -F F -e 1e-10 -D 1 -i $metrics_object->{'pda_no_primers_fasta'} -j $metrics_object->{'fastafile'} | grep -v "^#"`;
 
@@ -273,7 +293,7 @@ sub getPercentAmpliconCoverage{
 		    $fe = $metrics_object->{'snr_e'};
 		}
 	    }
-	    $percent = (($fe-$fs)+1)*100/$metrics_object->{'pda_no_primers_length'};
+	    $percent = (($fe-$fs)+1)*100/$bases_for_full_coverage;
 	}else{
 	    foreach $bl2seq_record (@bl2seq_records){
 		@bl2seq_rec_split = split("\t", $bl2seq_record);
@@ -302,8 +322,11 @@ sub getPercentAmpliconCoverage{
 		    $fe = $metrics_object->{'snr_e'};
 		}
 	    }
-	    $percent = (($fe-$fs)+1)*100/$metrics_object->{'pda_no_primers_length'};
+	    $percent = (($fe-$fs)+1)*100/$bases_for_full_coverage;
 	}
+        if ( $percent > 100 ) {
+            $percent = 100.0;
+        }
 	$percentAmpliconCoverage = sprintf("%.2f", $percent);
 	return $percentAmpliconCoverage;
     }else{
