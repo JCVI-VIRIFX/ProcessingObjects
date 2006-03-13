@@ -30,6 +30,7 @@ Object contains functions to calculate
 
 =cut
 
+use strict;
 use Config::IniFiles;
 use File::Path;
 use File::Copy;
@@ -56,7 +57,7 @@ sub new{
 	
         # CHECK FOR VALID CONFIGURATION FILE
 	if (!(-e $object->{'cfg_file'}  && -r $object->{'cfg_file'}) || (-d $object->{'cfg_file'})){
-	    print STDERR "Config file ($opt_c) can not be read. Quitting . . . \n";
+	    print STDERR "Config file ($object->{'cfg_file'}) can not be read. Quitting . . . \n";
 	    return $object;
 	}
 	
@@ -66,39 +67,34 @@ sub new{
 
 	# COPY NECESSARY CONFIG PARAMETERS TO METRICS OBJECT AND SET DIRECTORY VARIABLES
 	$object->{'bl2seq'} = $config{'Blast_Tools'}{'bl2seq_exe'};
+	$object->{'blast'} = $config{'Blast_Tools'}{'blast_exe'};
+	$object->{'repeat_detector'} = $config{'AmpliconHandling_Tools'}{'repeat_detector_exe'};
 	
 	my $target_study_dir = $config{'Target_Info'}{'target_dir_root'}."/".$config{'Target_Info'}{'target_project_type'}."/".$config{'Target_Info'}{'target_project'}."/".$config{'Target_Info'}{'target_study'};
 	my $work_dir = $target_study_dir."/".$config{'Target_Info'}{'target_work'};
 	my $data_dir = $target_study_dir."/".$config{'Target_Info'}{'target_data_dir_name'};
-	my $primer_design_dir = $data_dir."/".$config{'PrimerDesign_Info'}{'primer_design_dir_name'};
 	my $sequencing_dir = $data_dir."/".$config{'Target_Info'}{'target_sequencing_dir_name'};
 	my $manifest_dir = $sequencing_dir."/".$config{'Target_Info'}{'target_manifest_dir_name'};
 	my $manifest_files = $manifest_dir."/".$config{'Manifest_Info'}{'manifest_query_file'}.".txt";
-	my @pda_list = split(",", $config{'PrimerDesign_Info'}{'source_dir_root'});
-
-	my $pda_fasta = my $amplicons_dir = '';
-	
-	foreach my $dir (@pda_list){
-	    $pda_fasta = `ls -1 $dir/*/*/$object->{'gene'}/$config{'PrimerDesign_Info'}{'reference_amplicons_dir_name'}/$object->{'amplicon'}.fasta`;
-	    if($pda_fasta =~ /ls\s+No\s+match\./){
-		next;
-	    }else{
-		chomp($pda_fasta);
-		$pda_fasta =~ m/($dir)(\S+)($object->{'gene'})\//;
-		$amplicons_dir = $dir.$2.$object->{'gene'};
-		$reference_amplicons_dir = $amplicons_dir."/".$config{'PrimerDesign_Info'}{'reference_amplicons_dir_name'};
-		$object->{'pda_no_primers_fasta'} = `ls -1 $dir/*/*/$object->{'gene'}/$config{'PrimerDesign_Info'}{'reference_amplicons_dir_name'}/$object->{'amplicon'}_no_primers.fasta | tail -1`;
-		chomp($object->{'pda_no_primers_fasta'});
-		$object->{'pda_no_primers_length'} = `$config{'Emboss_Tools'}{'infoseq_exe'} $object->{'pda_no_primers_fasta'} -only -length`;
-		last;
-	    }
+	my $source_dir_root = $config{'PrimerDesign_Info'}{'source_dir_root'};	
+	if($source_dir_root =~ m/,/){
+	    $source_dir_root = "/project/reseq-small/primer_design/all_amplicons_location.db";
 	}
-	my $reference_amplicons_dir = $amplicons_dir."/".$config{'PrimerDesign_Info'}{'reference_amplicons_dir_name'};
-	my $reference_amplicons_blastdb = $reference_amplicons_dir ."/".$config{'PrimerDesign_Info'}{'all_amplicons_file'};
-	my $primer_design_report_file = $amplicons_dir."/".$config{'PrimerDesign_Info'}{'primer_info_file'};
-	my $primer_design_template_file = $amplicons_dir."/template.fasta";
 
-	$curr_dir = $work_dir."/".$object->{'gene'}."/".$object->{'amplicon'}."/".$object->{'donor'};
+	# Retrieve primer design reference amplicon data path form list of primer design data paths
+	my %all_amp_hash = ();
+	tie(%all_amp_hash, 'MLDBM',$source_dir_root) || die "Cannot to to $source_dir_root ($!)\n";
+	my $pda_fasta = $all_amp_hash{$object->{'amplicon'}};
+	my ($temp_fasta_file, $reference_amplicons_dir) = fileparse($pda_fasta, ".fasta");
+	my $amplicons_dir = $reference_amplicons_dir;
+	$amplicons_dir =~ s/reference_amplicons\///g;
+	$object->{'pda_no_primers_fasta'} = $reference_amplicons_dir."/".$object->{'amplicon'}."_no_primers.fasta";
+	$object->{'pda_no_primers_length'} = `$config{'Emboss_Tools'}{'infoseq_exe'} $object->{'pda_no_primers_fasta'} -only -length`;
+	
+	$object->{'ref_amp_blastdb'} = $reference_amplicons_dir ."/".$config{'PrimerDesign_Info'}{'all_amplicons_file'};
+	$object->{'primer_info_file'} = $amplicons_dir."/".$config{'PrimerDesign_Info'}{'primer_info_file'};
+	my $primer_design_template_file = $amplicons_dir."/template.fasta";
+	my $curr_dir = $work_dir."/".$object->{'gene'}."/".$object->{'amplicon'}."/".$object->{'donor'};
 
 	my @rec = split(/\t/, $object->{'record'});
 	my $check_amp = $rec[3];
@@ -126,6 +122,9 @@ sub new{
 		$object->{'fc'} = 0;
 		$object->{'psym'} = "TR";
 	    }
+	    $object->{'fasta_dir'} = $config{'TraceAnalysisDir_Info'}{'fasta'};
+	    $object->{'all_amplicons_file'} = $config{'PrimerDesign_Info'}{'all_amplicons_file'};
+	    $object->{'blast_dir'} = $config{'TraceAnalysisDir_Info'}{'blast'};
 	    my ($tracefile, $path, $type) = fileparse($object->{'ztr_file'}, ".ztr");
 	    my $traceid = $ztr_split[5];
 	    chomp($traceid);
@@ -133,6 +132,7 @@ sub new{
 	    my $snrfile = $config{'TraceAnalysisDir_Info'}{'snr'}."/".$scfname.".snr";
             my $phdfile = $config{'TraceAnalysisDir_Info'}{'phd'}."/".$scfname.".phd.1";
 	    $object->{'polyfile'} = $config{'TraceAnalysisDir_Info'}{'poly'}."/".$scfname.".poly";
+	    $object->{'fuzznuc_fasta'} = $curr_dir."/".$config{'TraceAnalysisDir_Info'}{'fasta'}."/".$scfname.".fasta";
 	    if (-e $snrfile){
 		if (-e $phdfile){
 		    if (-e $object->{'polyfile'}){
@@ -146,24 +146,24 @@ sub new{
 			$object->{'wellcol'} = $col;
 			
 		    }else{
-			print STDERR "Polyfile, $polyfile, does not exist ($!)\n";
-			return null;
+			print STDERR "Polyfile, $object->{'polyfile'}, does not exist ($!)\n";
+			return 0;
 		    }
 		}else{
 		    print STDERR "Phd file, $phdfile, does not exist ($!)\n";
-		    return null;
+		    return 0;
 		}
 	    }else{
 		print STDERR "SNR file, $snrfile, does not exist ($!)\n";
-		return null;
+		return 0;
 	    }
 	}else{
 	    print STDERR "Invalid record $object->{'record'}) \n";
-	    return null;
+	    return 0;
 	}
     }else{
 	print STDERR "Invalid inputs (@_)\n";
-	return null;
+	return 0;
     }
     bless $object, $class;
     $object->_initialize(@_);
@@ -234,6 +234,107 @@ sub getPSYMDirection{
 
 ###################################################################
 
+# CALCULATE AND RETURN THE MATCHING REFERENCE SEQUENCE
+sub getMatchingAmpliconReferenceSequence{
+    my $metrics_object = shift;
+
+    chdir($metrics_object->{'fasta_dir'});
+
+    my $scf_screen = `ls *$metrics_object->{'traceid'}.scf.fasta.screen`;
+    chomp($scf_screen);
+    my($file, $path, $type) = fileparse($scf_screen, '.scf.fasta.screen');
+    chomp($file);
+
+    my $blast_out = "../blast_dir/".$file.".blastn.out";
+    my @hit_count = `grep "^>$metrics_object->{'amplicon'}" $blast_out`;
+
+    # IF AMPLICON MATCHES REFERENCE CREATE SCREEN AND QUAL FILES
+    if ($#hit_count >= 0){
+	$metrics_object->{'hit_amp'} = "-8";
+    }else{
+
+	@hit_count = `grep "^>" $blast_out`;
+	
+	# IF AMPLICON MATCHES ANOTHER REFERENCE SEQUENCE IN THE SAME DIRECTORY THEN TAG AMPLICON
+	if($#hit_count >= 0){
+	    
+	    # GET STRAND DIRECTION
+	    my @strand = `grep "Strand" $blast_out`;
+	    $strand[0] =~ m/Strand\s=\s\S+\s\/\s(\S+)/;
+	    my $direction = $1;
+	    
+	    # GET AMPLICON HIT NAME
+	    $hit_count[0] =~ />(\S+)_reference\.scf/;
+	    my $amp_match = $1;
+	    
+	    if($direction eq "Plus"){
+		$metrics_object->{'hit_amp'} = $amp_match."(TF)";
+	    }else{
+		$metrics_object->{'hit_amp'} = $amp_match."(TR)";
+	    }
+	}else{
+	    
+	    # ELSE CHECK IF AMPLICON MATCHES REFERENCE OF AMPLICONS IN THE SAME PROJECT
+	    $metrics_object->{'ref_amp_blastdb'} =~ m/(\S+)(high|strict)/;
+	    my $proj_dir = $1;
+	    my $ref_proj_blastdb = $proj_dir.$metrics_object->{'all_amplicons_file'};
+	    my $blast_all_project = "../".$metrics_object->{'blast_dir'}."/".$file.".blastn_all_project.out";
+
+	    `$metrics_object->{'blast'} -p blastn -d $ref_proj_blastdb -i $scf_screen -o $blast_all_project -e 1e-10 -F F -v 5 -b 5`;
+	    @hit_count = `grep "^>" $blast_all_project`;
+	    
+	    
+	    if($#hit_count >= 0){
+		
+		# GET STRAND DIRECTION
+		my @strand = `grep "Strand" $blast_all_project`;
+		$strand[0] =~ m/Strand\s=\s\S+\s\/\s(\S+)/;
+		my $direction = $1;
+		
+		# GET AMPLICON HIT NAME
+		$hit_count[0] =~ />(\S+)_reference\.scf/;
+		my $amp_match = $1;
+		
+		if($direction eq "Plus"){
+		    $metrics_object->{'hit_amp'} = $amp_match."(TF)";
+		}else{
+		    $metrics_object->{'hit_amp'} = $amp_match."(TR)";
+		}
+	    }else{
+		my $ref_all_blastdb = $proj_dir."../../".$metrics_object->{'all_amplicons_file'};
+		my $blast_all = "../".$metrics_object->{'blast_dir'}."/".$file.".blastn_all.out";
+
+		`$metrics_object->{'blast'} -p blastn -d $ref_all_blastdb -i $scf_screen -o $blast_all -e 1e-10 -F F -v 5 -b 5`;
+		@hit_count = `grep "^>" $blast_all`;
+		if($#hit_count >= 0){
+		    
+		    # GET STRAND DIRECTION
+
+		    my @strand = `grep "Strand" $blast_all`;
+		    $strand[0] =~ m/Strand\s=\s\S+\s\/\s(\S+)/;
+		    my $direction = $1;
+		    
+		    # GET AMPLICON HIT NAME
+		    $hit_count[0] =~ />(\S+)_reference\.scf/;
+		    my $amp_match = $1;
+		    
+		    if($direction eq "Plus"){
+			$metrics_object->{'hit_amp'} = $amp_match."(TF)";
+		    }else{
+			$metrics_object->{'hit_amp'} = $amp_match."(TR)";
+		    }
+		}else{
+		    $metrics_object->{'hit_amp'} = "NO_MATCH";
+		}
+	    }
+	}
+    }
+    chdir(File::Spec->updir);
+    return $metrics_object->{'hit_amp'};
+}
+
+###################################################################
+
 # CALCULATE THE PERCENT OF THE AMPLICON THAT IS COVERED    
 sub getPercentAmpliconCoverage{
     my $metrics_object = shift; 
@@ -243,7 +344,7 @@ sub getPercentAmpliconCoverage{
     my $i;
 
    # DETERMINE START STUTTER IN REFERENCE SEQUENCE
-    @ref_start_stutter = `$cfg{'AmpliconHandling_Tools'}{'repeat_detector_exe'} -f $metrics_object->{'pda_no_primers_fasta'} -s 13 -m 22 | grep "^[1-9]" | cut -f 1`;
+    @ref_start_stutter = `$metrics_object->{'repeat_detector'} -f $metrics_object->{'pda_no_primers_fasta'} -s 13 -m 22 | grep "^[1-9]" | cut -f 1`;
     for($i=0; $i<=$#ref_start_stutter; $i++){
 	my $ref_start_stut = $ref_start_stutter[$i];
 	chomp($ref_start_stut);
@@ -263,11 +364,11 @@ sub getPercentAmpliconCoverage{
     my @bl2seq_records = `$metrics_object->{'bl2seq'} -p blastn -F F -e 1e-10 -D 1 -i $metrics_object->{'pda_no_primers_fasta'} -j $metrics_object->{'fastafile'} | grep -v "^#"`;
 
     if ($num_hsps > 0){
-	my $bl2seq = $direction = "";
-	my $s = $e = $fs = $fe = $percent = 0;
+	my($bl2seq, $direction) = "";
+	my($s, $e, $fs, $fe, $percent) = 0;
 	if ($metrics_object->{'fc'} > 0 ){ 
-	    foreach $bl2seq_record (@bl2seq_records){
-		@bl2seq_rec_split = split("\t", $bl2seq_record);
+	    foreach my $bl2seq_record (@bl2seq_records){
+		my @bl2seq_rec_split = split("\t", $bl2seq_record);
 	   
 		if((($bl2seq_rec_split[7]-$bl2seq_rec_split[6])*($bl2seq_rec_split[9]-$bl2seq_rec_split[8])) > 1){
 		    if($s == 0){
@@ -295,8 +396,8 @@ sub getPercentAmpliconCoverage{
 	    }
 	    $percent = (($fe-$fs)+1)*100/$bases_for_full_coverage;
 	}else{
-	    foreach $bl2seq_record (@bl2seq_records){
-		@bl2seq_rec_split = split("\t", $bl2seq_record);
+	    foreach my $bl2seq_record (@bl2seq_records){
+		my @bl2seq_rec_split = split("\t", $bl2seq_record);
 
 		if((($bl2seq_rec_split[7]-$bl2seq_rec_split[6])*($bl2seq_rec_split[9]-$bl2seq_rec_split[8])) < 1){
 		    if($s == 0){
@@ -343,7 +444,7 @@ sub getPercentHighMinorsOverall{
     open(POLYHD, "$metrics_object->{'polyfile'}") || die "Cannot open $metrics_object->{'polyfile'} ($!)\n";
     my $maja = 1.0;
     my $rec_num = $a = 0;
-    foreach $line (<POLYHD>){
+    foreach my $line (<POLYHD>){
 	chomp($line);
 	$rec_num++;
 	my @line_split = split(" ", $line);
@@ -379,7 +480,7 @@ sub getPercentHighMinorsInSNRCLR{
     my $maja = 1.0;
     my $rec_num = $a = 0;
     open(POLYHD, "$metrics_object->{'polyfile'}") || die "Cannot open $metrics_object->{'polyfile'} ($!)\n";
-    foreach $line (<POLYHD>){
+    foreach my $line (<POLYHD>){
 	chomp($line);
 	$rec_num++;
 	my @line_split = split(" ", $line);
@@ -418,8 +519,8 @@ sub getPercentPeakRatioAverage{
     my $percentPeakRatioAverage = 0;
     open(POLYHD, "$metrics_object->{'polyfile'}") || die "Cannot open $metrics_object->{'polyfile'} ($!)\n";
     my $maja = 1.0;
-    my $rec_num = $nm = $rs = 0;
-    foreach $line (<POLYHD>){
+    my($rec_num, $nm, $rs) = 0;
+    foreach my $line (<POLYHD>){
 	chomp($line);
 	$rec_num++;
 	my @line_split = split(" ", $line);
@@ -453,24 +554,69 @@ sub getPercentPeakRatioAverage{
 # CALCULATE THE NUMBER OF BASES OF OPPOSITE STRAND PRIMING
 sub getNumBasesOppositeStrand{
     my $metrics_object = shift;
-    
-    my $numBasesOppositeStrand = 0;
+    my $fuzznuc = "/home/tstockwe/tcag/external_software/emboss/EMBOSS-2.7.1/emboss/fuzznuc";
+    my $fuzznuc_cmd = "";
+    my $numBasesOppositeStrand = my $max_base = my $hit_max_base = 0;
+    my $min_amp_length = 100;
+    my $max_amp_length = 850;
+    my $seq_primer_pigtail_length = 19;
+
+    # Retrieve primer sequences
+    my $fwd_primer = `grep $metrics_object->{'amplicon'} $metrics_object->{'primer_info_file'} | cut -f 6`;
+    chomp($fwd_primer);
+    $fwd_primer =~ tr/[AaCcGgTtMmRrYyKkVvHhDdBb]/[TtGgCcAaKkYyRrMmBbDdHhVv]/;
+    my $rev_comp_fwd_primer = reverse($fwd_primer);
+    my $rev_primer = `grep $metrics_object->{'amplicon'} $metrics_object->{'primer_info_file'} | cut -f 7`;
+    chomp($rev_primer);
+    $rev_primer =~ tr/[AaCcGgTtMmRrYyKkVvHhDdBb]/[TtGgCcAaKkYyRrMmBbDdHhVv]/;
+    my $rev_comp_rev_primer = reverse($rev_primer);
+
+    # Determine end of valid sequence in trace
+    if($metrics_object->{'psym'} eq "TF"){
+	$fuzznuc_cmd = "$fuzznuc -sequence $metrics_object->{'fuzznuc_fasta'}
+                                 -pattern $rev_comp_rev_primer
+                                 -mismatch 2
+                                 -outfile $metrics_object->{'fuzznuc_fasta'}.fuzznuc";
+    }else{
+	$fuzznuc_cmd = "$fuzznuc -sequence $metrics_object->{'fuzznuc_fasta'}
+                                 -pattern $rev_comp_fwd_primer
+                                 -mismatch 2
+                                 -outfile $metrics_object->{'fuzznuc_fasta'}.fuzznuc";
+    }
+    $fuzznuc_cmd =~ s/\n/ /g;
+    `$fuzznuc_cmd`;
+
+    my @base_info_arr = `grep -v "^#" $metrics_object->{'fuzznuc_fasta'}.fuzznuc | grep -v "Start"`;
+    foreach my $base_info (@base_info_arr){
+	$base_info =~ s/(\s+)/:/g;
+	my @max_base_info_arr = split(":", $base_info);
+	my $seq_length = $max_base_info_arr[1];
+	if($seq_length > $min_amp_length){
+	    $max_base = $seq_length + $seq_primer_pigtail_length;
+	    $hit_max_base = 1;
+	}
+    }
+
+    if(!($hit_max_base)){
+	$max_base = $max_amp_length;
+    }
+
     open(POLYHD, "$metrics_object->{'polyfile'}") || die "Cannot open $metrics_object->{'polyfile'} ($!)\n";
-    $majFile = $metrics_object->{'polyfile'}.".fasta_major";
-    $minFile = $metrics_object->{'polyfile'}.".fasta_minor";
+    my $majFile = $metrics_object->{'polyfile'}.".fasta_major";
+    my $minFile = $metrics_object->{'polyfile'}.".fasta_minor";
     open(MAJOROUTHD, ">$majFile") || die "Cannot open $majFile ($!)\n";
     open(MINOROUTHD, ">$minFile") || die "Cannot open $minFile ($!)\n";
-    my $rec_num = $fe = $fs = $s = $e = $nob = 0;
+    my($rec_num, $fe, $fs, $s, $e, $nob) = 0;
 
-    # CREATE A FASTA FILE FOR THE MAJOR AND MINOR BASES
-    foreach $line (<POLYHD>){
+    # Generate major and minor sequence fasta files
+    foreach my $line (<POLYHD>){
 	chomp($line);
 	$rec_num++;
 	my @line_split = split(" ", $line);
 	if($rec_num == 1){
 	    printf MAJOROUTHD ">major_%s\n", $line_split[0];
 	    printf MINOROUTHD ">minor_%s\n", $line_split[0];
-	}else{
+	}elsif($rec_num <= $max_base+1){
 	    printf MAJOROUTHD "%s", $line_split[0];
 	    if($line_split[4] eq "N"){
 		printf MINOROUTHD "%s", $line_split[0];
@@ -486,7 +632,7 @@ sub getNumBasesOppositeStrand{
 
     my @bl2seq_records = `$metrics_object->{'bl2seq'} -p blastn -e 1e-10 -D 1 -i $majFile -j $minFile | grep -v "^#"`;
 
-    foreach $bl2seq_record (@bl2seq_records){
+    foreach my $bl2seq_record (@bl2seq_records){
 	my @bl2seq_rec_split = split("\t", $bl2seq_record);
 
 	# COUNT NUMBER OF OPPOSITE STRAND PRIMING BASES
