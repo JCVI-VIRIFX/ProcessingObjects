@@ -78,7 +78,7 @@ sub new{
 	my $manifest_files = $manifest_dir."/".$config{'Manifest_Info'}{'manifest_query_file'}.".txt";
 	my $source_dir_root = $config{'PrimerDesign_Info'}{'source_dir_root'};	
 	if($source_dir_root =~ m/,/){
-	    $source_dir_root = "/project/reseq-small/primer_design/all_amplicons_location.db";
+	    $source_dir_root = "/project/reseq-small/primer_design/all_amplicons_with_uid_location.db";
 	}
 
 	# Retrieve primer design reference amplicon data path form list of primer design data paths
@@ -97,36 +97,55 @@ sub new{
 	my $curr_dir = $work_dir."/".$object->{'gene'}."/".$object->{'amplicon'}."/".$object->{'donor'};
 
 	my @rec = split(/\t/, $object->{'record'});
+	my $check_manifest = $rec[0];
+	my $row = $rec[1];
+	my $col = $rec[2];
 	my $check_amp = $rec[3];
 	my $check_dna = $rec[4];
+	my $check_dir = $rec[5];
+	my $check_tfid = $rec[6];
+	chomp($check_tfid);
+	chomp($check_dir);
 	chomp($check_dna);
 	chomp($check_amp);
 	$check_amp =~ s/\s+//;
 	$check_dna =~ s/\s+//;
 	if($check_amp eq $object->{'amplicon'} && $check_dna eq $object->{'donor'}){
-	    my $plate = $rec[0];
-	    my $row = $rec[1];
-	    my $col = $rec [2];
-
-	    my $ztr_file = `ls -1 $sequencing_dir/*/*/$rec[0]_$rec[1]$rec[2]_*`;
-	    chomp($ztr_file);
-	    my $temp_name = basename($ztr_file);
-	    my @ztr_split = split("_", $temp_name);
-	    my $new_name = '';
-	    if( $ztr_file =~ m/forward/){
-		$object->{'ztr_file'} = $object->{'donor'}."_f_".$object->{'amplicon'}."_".$ztr_split[5].".ztr";
-		$object->{'fc'} = 1;
-		$object->{'psym'} = "TF";
-	    }else{
-		$object->{'ztr_file'} = $object->{'donor'}."_r_".$object->{'amplicon'}."_".$ztr_split[5].".ztr";
-		$object->{'fc'} = 0;
-		$object->{'psym'} = "TR";
+	    my ($trace_dir, $new_name);
+	    if($check_dir eq 'TF'){
+		$trace_dir = $sequencing_dir."/forward_traces/".$check_manifest."/";
+                $new_name = $check_dna."_f_";
+            }elsif($check_dir eq 'TR'){
+                $trace_dir = $sequencing_dir."/reverse_traces/".$check_manifest."/";
+                $new_name = $check_dna."_r_";
+            }
+	    opendir(SEQDIRHD, $trace_dir) || die "Cannot open directory ($!)\n\t$trace_dir\n";
+	    my @ztr_split_arr = grep(/.*($check_tfid).*\.ztr/, readdir(SEQDIRHD));
+	    close(SEQDIRHD);
+	    if($#ztr_split_arr > 0){
+		print STDERR "MULTIPLE FILES FOUND FOR THE FOLLOWING TFID: $check_tfid\n";
+		die();
 	    }
+	    my $ztr_file = $ztr_split_arr[0];
+	    my @ztr_split = split("_", $ztr_file);
+	    my $trace_id = $ztr_split[5];
+	    $new_name .= $check_amp."_".$trace_id.".ztr";
+	    $object->{'ztr_file'} = $new_name;
+	    if($check_dir eq "TF"){
+		$object->{'fc'} = 1;
+	    }else{
+		$object->{'fc'} = 0;
+	    }
+	    $object->{'psym'} = $check_dir;
 	    $object->{'fasta_dir'} = $config{'TraceAnalysisDir_Info'}{'fasta'};
 	    $object->{'all_amplicons_file'} = $config{'PrimerDesign_Info'}{'all_amplicons_file'};
 	    $object->{'blast_dir'} = $config{'TraceAnalysisDir_Info'}{'blast'};
 	    my ($tracefile, $path, $type) = fileparse($object->{'ztr_file'}, ".ztr");
+
 	    my $traceid = $ztr_split[5];
+
+	    print "TRACEFILE: $tracefile\n";
+
 	    chomp($traceid);
             my $scfname = $tracefile.".scf";
 	    my $snrfile = $config{'TraceAnalysisDir_Info'}{'snr'}."/".$scfname.".snr";
@@ -140,7 +159,7 @@ sub new{
 			$object->{'snr_e'} = `cut -d ' ' -f 4 $snrfile`;
 			$object->{'fastafile'} = $config{'TraceAnalysisDir_Info'}{'fasta'}."/".$scfname.".fasta.screen";
 			$object->{'metricsfile'} = $config{'TraceAnalysisDir_Info'}{'metrics'}."/".$scfname.".metrics";
-			$object->{'barcodeid'} = $plate;
+			$object->{'barcodeid'} = $check_manifest;
 			$object->{'traceid'} = $traceid;
 			$object->{'wellrow'} = $row;
 			$object->{'wellcol'} = $col;
@@ -240,7 +259,9 @@ sub getMatchingAmpliconReferenceSequence{
 
     chdir($metrics_object->{'fasta_dir'});
 
+    my $scf_screen;
     my $scf_screen = `ls *$metrics_object->{'traceid'}.scf.fasta.screen`;
+
     chomp($scf_screen);
     my($file, $path, $type) = fileparse($scf_screen, '.scf.fasta.screen');
     chomp($file);
@@ -250,7 +271,17 @@ sub getMatchingAmpliconReferenceSequence{
 
     # IF AMPLICON MATCHES REFERENCE CREATE SCREEN AND QUAL FILES
     if ($#hit_count >= 0){
-	$metrics_object->{'hit_amp'} = "-8";
+	my $strand = `grep "Strand" $blast_out | head -1`;
+	if($strand =~ m/Strand\s=\s\S+\s\/\s(\S+)/){
+	    my $direction = $1;
+	    if($direction eq "Plus" &&  $metrics_object->{'psym'} eq "TR"){
+		$metrics_object->{'hit_amp'} = "reference(TF)";
+	    }elsif($direction eq "Minus" && $metrics_object->{'psym'} eq "TF"){
+		$metrics_object->{'hit_amp'} = "reference(TR)";
+	    }else{
+		$metrics_object->{'hit_amp'} = "-8";
+	    }
+	}
     }else{
 
 	@hit_count = `grep "^>" $blast_out`;
@@ -363,6 +394,9 @@ sub getPercentAmpliconCoverage{
     my $num_hsps = `$metrics_object->{'bl2seq'} -p blastn -F F -e 1e-10 -D 1 -i $metrics_object->{'pda_no_primers_fasta'} -j $metrics_object->{'fastafile'} | grep -v "^#" | wc -l`;
     my @bl2seq_records = `$metrics_object->{'bl2seq'} -p blastn -F F -e 1e-10 -D 1 -i $metrics_object->{'pda_no_primers_fasta'} -j $metrics_object->{'fastafile'} | grep -v "^#"`;
 
+    print STDOUT "# HSP: $num_hsps\n";
+    print STDOUT Dumper(@bl2seq_records);
+
     if ($num_hsps > 0){
 	my($bl2seq, $direction) = "";
 	my($s, $e, $fs, $fe, $percent) = 0;
@@ -429,6 +463,7 @@ sub getPercentAmpliconCoverage{
             $percent = 100.0;
         }
 	$percentAmpliconCoverage = sprintf("%.2f", $percent);
+	print "$percentAmpliconCoverage\n";
 	return $percentAmpliconCoverage;
     }else{
 	return 0;
