@@ -34,7 +34,6 @@ sub retry($@) {
 }
 sub chdir_safe($) {
     my ($path) = @_;
-    print STDERR "chdir_safe: $path\n";
     retry(sub {chdir $_[0]}, $path);
 }
 sub mkdir_safe($;$) {
