@@ -13,6 +13,6 @@ INSDOCDIR   = $(INSTALLDIR)/doc
 
 install:
 	@mkdir -p $(INSBINDIR)
-        @cp SafeIO.pm $(INSBINDIR)/
+	@cp SafeIO.pm $(INSBINDIR)/
 	@cp Metrics.pm $(INSBINDIR)/
 	@cp ../../primer_design/PrimerDesigner/LIMSTools/WriteXML.pm $(INSBINDIR)/
