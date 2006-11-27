@@ -46,7 +46,7 @@ use Data::Dumper;
 sub new{
     my $class = shift;
     my $object = {};
-    if(@_ == 5){
+    if(@_ == 6){
 
 	# CHECK FOR ALL 5 REQUIRED INPUT PARAMETERS
 	$object->{'gene'} = shift;
@@ -54,7 +54,8 @@ sub new{
 	$object->{'donor'} = shift;
 	$object->{'record'} = shift;
 	$object->{'cfg_file'} = shift;
-	
+	$object->{'curr_work_dir'} = shift;
+
         # CHECK FOR VALID CONFIGURATION FILE
 	if (!(-e $object->{'cfg_file'}  && -r $object->{'cfg_file'}) || (-d $object->{'cfg_file'})){
 	    print STDERR "Config file ($object->{'cfg_file'}) can not be read. Quitting . . . \n";
@@ -71,7 +72,7 @@ sub new{
 	$object->{'repeat_detector'} = $config{'AmpliconHandling_Tools'}{'repeat_detector_exe'};
 	
 	my $target_study_dir = $config{'Target_Info'}{'target_dir_root'}."/".$config{'Target_Info'}{'target_project_type'}."/".$config{'Target_Info'}{'target_project'}."/".$config{'Target_Info'}{'target_study'};
-	my $work_dir = $target_study_dir."/".$config{'Target_Info'}{'target_work'};
+	my $work_dir = $object->{'curr_work_dir'};
 	my $data_dir = $target_study_dir."/".$config{'Target_Info'}{'target_data_dir_name'};
 	my $sequencing_dir = $data_dir."/".$config{'Target_Info'}{'target_sequencing_dir_name'};
 	my $manifest_dir = $sequencing_dir."/".$config{'Target_Info'}{'target_manifest_dir_name'};
