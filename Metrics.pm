@@ -40,7 +40,6 @@ use IO::Handle;
 use Getopt::Std;
 use Date::Format;
 
-use Data::Dumper;
 ###################################################################
 
 sub new{
@@ -395,9 +394,6 @@ sub getPercentAmpliconCoverage{
     my $num_hsps = `$metrics_object->{'bl2seq'} -p blastn -F F -e 1e-10 -D 1 -i $metrics_object->{'pda_no_primers_fasta'} -j $metrics_object->{'fastafile'} | grep -v "^#" | wc -l`;
     my @bl2seq_records = `$metrics_object->{'bl2seq'} -p blastn -F F -e 1e-10 -D 1 -i $metrics_object->{'pda_no_primers_fasta'} -j $metrics_object->{'fastafile'} | grep -v "^#"`;
 
-    print STDOUT "# HSP: $num_hsps\n";
-    print STDOUT Dumper(@bl2seq_records);
-
     if ($num_hsps > 0){
 	my($bl2seq, $direction) = "";
 	my($s, $e, $fs, $fe, $percent) = 0;
@@ -464,7 +460,6 @@ sub getPercentAmpliconCoverage{
             $percent = 100.0;
         }
 	$percentAmpliconCoverage = sprintf("%.2f", $percent);
-	print "$percentAmpliconCoverage\n";
 	return $percentAmpliconCoverage;
     }else{
 	return 0;
