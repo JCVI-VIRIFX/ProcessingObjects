@@ -11,7 +11,7 @@ our ($RETRY_NUM,$DELAY);
 BEGIN {
     use Exporter ();
     our ($VERSION, @ISA, @EXPORT);
-    $VERSION = sprintf "%d.%03d", q$Revision$ =~ /(\d+)/g;
+    $VERSION = sprintf "%d", q$Revision: 313$ =~ /(\d+)/g;
     @ISA = qw(Exporter);
     @EXPORT = qw(mkdir_safe chdir_safe rmdir_safe unlink_safe symlink_safe
                  copy_safe move_safe system_safe);
