@@ -69,7 +69,6 @@ sub new{
 	$object->{'bl2seq'} = $config{'Blast_Tools'}{'bl2seq_exe'};
 	$object->{'blast'} = $config{'Blast_Tools'}{'blast_exe'};
 	$object->{'repeat_detector'} = $config{'AmpliconHandling_Tools'}{'repeat_detector_exe'};
-        $object->{'fuzznuc'} = $config{'Emboss_Tools'}{'fuzznuc_exe'};
 	
 	my $target_study_dir = $config{'Target_Info'}{'target_dir_root'}."/".$config{'Target_Info'}{'target_project_type'}."/".$config{'Target_Info'}{'target_project'}."/".$config{'Target_Info'}{'target_study'};
 	my $work_dir = $object->{'curr_work_dir'};
@@ -79,7 +78,7 @@ sub new{
 	my $manifest_files = $manifest_dir."/".$config{'Manifest_Info'}{'manifest_query_file'}.".txt";
 	my $source_dir_root = $config{'PrimerDesign_Info'}{'source_dir_root'};	
 	if($source_dir_root =~ m/,/){
-	    $source_dir_root = "/project/reseq-small/primer_design/all_amplicons_with_uid_location.db";
+	    $source_dir_root = "/usr/local/projects/RESEQ-SMALL/primer_design/all_amplicons_with_uid_location.db";
 	}
 
 	# Retrieve primer design reference amplicon data path form list of primer design data paths
@@ -586,6 +585,8 @@ sub getPercentPeakRatioAverage{
 # CALCULATE THE NUMBER OF BASES OF OPPOSITE STRAND PRIMING
 sub getNumBasesOppositeStrand{
     my $metrics_object = shift;
+    my $fuzznuc = "/usr/local/packages/EMBOSS-2.9.0/bin/fuzznuc";
+    my $fuzznuc_cmd = "";
     my $numBasesOppositeStrand = my $max_base = my $hit_max_base = 0;
     my $min_amp_length = 100;
     my $max_amp_length = 850;
@@ -601,17 +602,14 @@ sub getNumBasesOppositeStrand{
     $rev_primer =~ tr/[AaCcGgTtMmRrYyKkVvHhDdBb]/[TtGgCcAaKkYyRrMmBbDdHhVv]/;
     my $rev_comp_rev_primer = reverse($rev_primer);
 
-    my $fuzznuc_cmd;
     # Determine end of valid sequence in trace
     if($metrics_object->{'psym'} eq "TF"){
-	$fuzznuc_cmd = "$metrics_object->{'fuzznuc'} 
-                                 -sequence $metrics_object->{'fuzznuc_fasta'}
+	$fuzznuc_cmd = "$fuzznuc -sequence $metrics_object->{'fuzznuc_fasta'}
                                  -pattern $rev_comp_rev_primer
                                  -mismatch 2
                                  -outfile $metrics_object->{'fuzznuc_fasta'}.fuzznuc";
     }else{
-	$fuzznuc_cmd = "$metrics_object->{'fuzznuc'} 
-                                 -sequence $metrics_object->{'fuzznuc_fasta'}
+	$fuzznuc_cmd = "$fuzznuc -sequence $metrics_object->{'fuzznuc_fasta'}
                                  -pattern $rev_comp_fwd_primer
                                  -mismatch 2
                                  -outfile $metrics_object->{'fuzznuc_fasta'}.fuzznuc";
