@@ -33,8 +33,8 @@ Object contains functions to calculate
 use strict;
 use Config::IniFiles;
 use File::Path;
-use File::Copy;
 use File::Basename;
+use MLDBM 'DB_File';
 use File::Spec;
 use IO::Handle;
 use Getopt::Std;
@@ -45,43 +45,57 @@ use Date::Format;
 sub new{
     my $class = shift;
     my $object = {};
-    if(@_ == 6){
+    if(@_ == 4){
 
 	# CHECK FOR ALL 5 REQUIRED INPUT PARAMETERS
-	$object->{'gene'} = shift;
-	$object->{'amplicon'} = shift;
-	$object->{'donor'} = shift;
+        $object->{'ztr_file'} = shift;
 	$object->{'record'} = shift;
 	$object->{'cfg_file'} = shift;
 	$object->{'curr_work_dir'} = shift;
 
-        # CHECK FOR VALID CONFIGURATION FILE
+	chdir($object->{'curr_work_dir'});
+	
+	# Set core variables
+	my @rec = split(/\t/, $object->{'record'});
+	$object->{'barcodeid'} = $rec[0];
+	$object->{'wellrow'} = $rec[1];
+	$object->{'wellcol'} = $rec[2];
+	$object->{'amplicon'} = $rec[3];
+	$object->{'dna'} = $rec[4];
+	$object->{'psym'} = $rec[5];
+	
+	my @ztr_split = split("_", $object->{'ztr_file'});
+	if($object->{'ztr_file'} =~ /\_(\d+).ztr/){
+	    $object->{'traceid'} = $1;
+	}
+	if($object->{'psym'} eq "TF"){
+	    $object->{'fc'} = 1;
+	}else{
+	    $object->{'fc'} = 0;
+	}
+	my ($tracefile, $path, $type) = fileparse($object->{'ztr_file'}, ".ztr");
+
+        # Check for valid configuration file
 	if (!(-e $object->{'cfg_file'}  && -r $object->{'cfg_file'}) || (-d $object->{'cfg_file'})){
 	    print STDERR "Config file ($object->{'cfg_file'}) can not be read. Quitting . . . \n";
 	    return $object;
 	}
 	
-	# READ INI FILE
+	# Read ini file
 	my %config;
 	tie %config, 'Config::IniFiles', ( -file => "$object->{cfg_file}" );
 
-	# COPY NECESSARY CONFIG PARAMETERS TO METRICS OBJECT AND SET DIRECTORY VARIABLES
+	# Set directory and exe variables
 	$object->{'bl2seq'} = $config{'Blast_Tools'}{'bl2seq_exe'};
 	$object->{'blast'} = $config{'Blast_Tools'}{'blast_exe'};
 	$object->{'repeat_detector'} = $config{'AmpliconHandling_Tools'}{'repeat_detector_exe'};
+	$object->{'fuzznuc'} = $config{'Emboss_Tools'}{'fuzznuc_exe'};
+	$object->{'fasta_dir'} = $config{'TraceAnalysisDir_Info'}{'fasta'};
+	$object->{'all_amplicons_file'} = $config{'PrimerDesign_Info'}{'all_amplicons_file'};
+	$object->{'blast_dir'} = $config{'TraceAnalysisDir_Info'}{'blast'};
 	
-	my $target_study_dir = $config{'Target_Info'}{'target_dir_root'}."/".$config{'Target_Info'}{'target_project_type'}."/".$config{'Target_Info'}{'target_project'}."/".$config{'Target_Info'}{'target_study'};
-	my $work_dir = $object->{'curr_work_dir'};
-	my $data_dir = $target_study_dir."/".$config{'Target_Info'}{'target_data_dir_name'};
-	my $sequencing_dir = $data_dir."/".$config{'Target_Info'}{'target_sequencing_dir_name'};
-	my $manifest_dir = $sequencing_dir."/".$config{'Target_Info'}{'target_manifest_dir_name'};
-	my $manifest_files = $manifest_dir."/".$config{'Manifest_Info'}{'manifest_query_file'}.".txt";
-	my $source_dir_root = $config{'PrimerDesign_Info'}{'source_dir_root'};	
-	if($source_dir_root =~ m/,/){
-	    $source_dir_root = "/usr/local/projects/RESEQ-SMALL/primer_design/all_amplicons_with_uid_location.db";
-	}
-
 	# Retrieve primer design reference amplicon data path form list of primer design data paths
+	my $source_dir_root = $config{'PrimerDesign_Info'}{'source_dir_root'};
 	my %all_amp_hash = ();
 	tie(%all_amp_hash, 'MLDBM',$source_dir_root) || die "Cannot to to $source_dir_root ($!)\n";
 	my $pda_fasta = $all_amp_hash{$object->{'amplicon'}};
@@ -90,99 +104,38 @@ sub new{
 	$amplicons_dir =~ s/reference_amplicons\///g;
 	$object->{'pda_no_primers_fasta'} = $reference_amplicons_dir."/".$object->{'amplicon'}."_no_primers.fasta";
 	$object->{'pda_no_primers_length'} = `$config{'Emboss_Tools'}{'infoseq_exe'} $object->{'pda_no_primers_fasta'} -only -length`;
-	
 	$object->{'ref_amp_blastdb'} = $reference_amplicons_dir ."/".$config{'PrimerDesign_Info'}{'all_amplicons_file'};
 	$object->{'primer_info_file'} = $amplicons_dir."/".$config{'PrimerDesign_Info'}{'primer_info_file'};
 	my $primer_design_template_file = $amplicons_dir."/template.fasta";
-	my $curr_dir = $work_dir."/".$object->{'gene'}."/".$object->{'amplicon'}."/".$object->{'donor'};
 
-	my @rec = split(/\t/, $object->{'record'});
-	my $check_manifest = $rec[0];
-	my $row = $rec[1];
-	my $col = $rec[2];
-	my $check_amp = $rec[3];
-	my $check_dna = $rec[4];
-	my $check_dir = $rec[5];
-	my $check_tfid = $rec[6];
-	chomp($check_tfid);
-	chomp($check_dir);
-	chomp($check_dna);
-	chomp($check_amp);
-	$check_amp =~ s/\s+//;
-	$check_dna =~ s/\s+//;
-	if($check_amp eq $object->{'amplicon'} && $check_dna eq $object->{'donor'}){
-	    my ($trace_dir, $new_name);
-	    if($check_dir eq 'TF'){
-		$trace_dir = $sequencing_dir."/forward_traces/".$check_manifest."/";
-                $new_name = $check_dna."_f_";
-            }elsif($check_dir eq 'TR'){
-                $trace_dir = $sequencing_dir."/reverse_traces/".$check_manifest."/";
-                $new_name = $check_dna."_r_";
-            }
-	    opendir(SEQDIRHD, $trace_dir) || die "Cannot open directory ($!)\n\t$trace_dir\n";
-	    my @ztr_split_arr = grep(/.*($check_tfid).*\.ztr/, readdir(SEQDIRHD));
-	    close(SEQDIRHD);
-	    if($#ztr_split_arr > 0){
-		print STDERR "MULTIPLE FILES FOUND FOR THE FOLLOWING TFID: $check_tfid\n";
-		die();
-	    }
-	    my $ztr_file = $ztr_split_arr[0];
-	    my @ztr_split = split("_", $ztr_file);
-	    my $trace_id = $ztr_split[5];
-	    $new_name .= $check_amp."_".$trace_id.".ztr";
-	    $object->{'ztr_file'} = $new_name;
-	    if($check_dir eq "TF"){
-		$object->{'fc'} = 1;
-	    }else{
-		$object->{'fc'} = 0;
-	    }
-	    $object->{'psym'} = $check_dir;
-	    $object->{'fasta_dir'} = $config{'TraceAnalysisDir_Info'}{'fasta'};
-	    $object->{'all_amplicons_file'} = $config{'PrimerDesign_Info'}{'all_amplicons_file'};
-	    $object->{'blast_dir'} = $config{'TraceAnalysisDir_Info'}{'blast'};
-	    my ($tracefile, $path, $type) = fileparse($object->{'ztr_file'}, ".ztr");
-
-	    my $traceid = $ztr_split[5];
-
-	    print "TRACEFILE: $tracefile\n";
-
-	    chomp($traceid);
-            my $scfname = $tracefile.".scf";
-	    my $snrfile = $config{'TraceAnalysisDir_Info'}{'snr'}."/".$scfname.".snr";
-            my $phdfile = $config{'TraceAnalysisDir_Info'}{'phd'}."/".$scfname.".phd.1";
-	    $object->{'polyfile'} = $config{'TraceAnalysisDir_Info'}{'poly'}."/".$scfname.".poly";
-	    $object->{'fuzznuc_fasta'} = $curr_dir."/".$config{'TraceAnalysisDir_Info'}{'fasta'}."/".$scfname.".fasta";
-	    if (-e $snrfile){
-		if (-e $phdfile){
-		    if (-e $object->{'polyfile'}){
-			$object->{'snr_s'} = `cut -d ' ' -f 3 $snrfile`;
-			$object->{'snr_e'} = `cut -d ' ' -f 4 $snrfile`;
-			$object->{'fastafile'} = $config{'TraceAnalysisDir_Info'}{'fasta'}."/".$scfname.".fasta.screen";
-			$object->{'metricsfile'} = $config{'TraceAnalysisDir_Info'}{'metrics'}."/".$scfname.".metrics";
-			$object->{'barcodeid'} = $check_manifest;
-			$object->{'traceid'} = $traceid;
-			$object->{'wellrow'} = $row;
-			$object->{'wellcol'} = $col;
-			
-		    }else{
-			print STDERR "Polyfile, $object->{'polyfile'}, does not exist ($!)\n";
-			return 0;
-		    }
+	
+	my $scfname = $tracefile.".scf";
+	my $snrfile = $config{'TraceAnalysisDir_Info'}{'snr'}."/".$scfname.".snr";
+	my $phdfile = $config{'TraceAnalysisDir_Info'}{'phd'}."/".$scfname.".phd.1";
+	$object->{'polyfile'} = $config{'TraceAnalysisDir_Info'}{'poly'}."/".$scfname.".poly";
+	$object->{'fuzznuc_fasta'} = "$object->{'curr_work_dir'}/$config{'TraceAnalysisDir_Info'}{'fasta'}/$scfname.fasta";
+	if (-e $snrfile){
+	    if (-e $phdfile){
+	        if (-e $object->{'polyfile'}){
+		    $object->{'snr_s'} = `cut -d ' ' -f 3 $snrfile`;
+		    $object->{'snr_e'} = `cut -d ' ' -f 4 $snrfile`;
+		    $object->{'fastafile'} = $config{'TraceAnalysisDir_Info'}{'fasta'}."/".$scfname.".fasta.screen";
+		    $object->{'metricsfile'} = $config{'TraceAnalysisDir_Info'}{'metrics'}."/".$scfname.".metrics";
 		}else{
-		    print STDERR "Phd file, $phdfile, does not exist ($!)\n";
-		    return 0;
+		    print STDERR "Polyfile, $object->{'polyfile'}, does not exist ($!)\n";
+		    return 1;
 		}
 	    }else{
-		print STDERR "SNR file, $snrfile, does not exist ($!)\n";
-		return 0;
+		print STDERR "Phd file, $phdfile, does not exist ($!)\n";
+		return 1;
 	    }
 	}else{
-	    print STDERR "Invalid record $object->{'record'}) \n";
-	    return 0;
+	    print STDERR "SNR file, $snrfile, does not exist ($!)\n";
+	    return 1;
 	}
     }else{
 	print STDERR "Invalid inputs (@_)\n";
-	return 0;
+	return 1;
     }
     bless $object, $class;
     $object->_initialize(@_);
@@ -261,7 +214,6 @@ sub getMatchingAmpliconReferenceSequence{
 
     my $scf_screen;
     my $scf_screen = `ls *$metrics_object->{'traceid'}.scf.fasta.screen`;
-
     chomp($scf_screen);
     my($file, $path, $type) = fileparse($scf_screen, '.scf.fasta.screen');
     chomp($file);
@@ -604,12 +556,14 @@ sub getNumBasesOppositeStrand{
 
     # Determine end of valid sequence in trace
     if($metrics_object->{'psym'} eq "TF"){
-	$fuzznuc_cmd = "$fuzznuc -sequence $metrics_object->{'fuzznuc_fasta'}
+	$fuzznuc_cmd = "$metrics_object->{'fuzznuc'}
+				 -sequence $metrics_object->{'fuzznuc_fasta'}
                                  -pattern $rev_comp_rev_primer
                                  -mismatch 2
                                  -outfile $metrics_object->{'fuzznuc_fasta'}.fuzznuc";
     }else{
-	$fuzznuc_cmd = "$fuzznuc -sequence $metrics_object->{'fuzznuc_fasta'}
+	$fuzznuc_cmd = "$metrics_object->{'fuzznuc'} 
+				 -sequence $metrics_object->{'fuzznuc_fasta'}
                                  -pattern $rev_comp_fwd_primer
                                  -mismatch 2
                                  -outfile $metrics_object->{'fuzznuc_fasta'}.fuzznuc";
