@@ -17,3 +17,4 @@ install:
 	@cp SafeIO.pm $(INSBINDIR)/
 	@cp Metrics.pm $(INSBINDIR)/
 	@cp WriteXML.pm $(INSBINDIR)/
+	@cp ReadStudyXML.pm $(INSBINDIR)/
