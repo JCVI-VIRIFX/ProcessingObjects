@@ -94,6 +94,27 @@ sub _loadXML{
 }
 
 ###################################################################
+# Return 1 or 0 if amplicon is or is not a valid amplicon for 
+# this study
+sub isValidAmplicon{
+		
+=head2 int isValidAmplicon(string ampliconName);
+
+	This function returns 1 or 0 if amplicon is or is not a 
+	valid amplicon for this study
+=cut
+    my $object = shift;
+    my $amp_name = shift;
+    
+    if(defined $object->{'xml_hash'}->{'ampliconList'}->{'amplicon'}->{$amp_name} ||
+       $object->{'xml_hash'}->{'ampliconList'}->{'amplicon'}->{'name'} eq $amp_name){
+	return 1;
+    }else{
+	return 0;
+    }
+}
+
+###################################################################
 # Return list of all amplicons
 sub getAllAmplicons{
 		
@@ -229,6 +250,27 @@ sub getAmpliconStutterStatus{
 }
 
 ###################################################################
+# Return 1 or 0 if dna is or is not a valid dna for 
+# this study
+sub isValidDNA{
+		
+=head2 int isValidDNA(string dnaName);
+
+	This function returns 1 or 0 if dna is or is not a 
+	valid dna for this study
+=cut
+    my $object = shift;
+    my $dna_name = shift;
+    
+    if(defined $object->{'xml_hash'}->{'dnaList'}->{'dna'}->{$dna_name} ||
+       $object->{'xml_hash'}->{'dnaList'}->{'dna'}->{'name'} eq $dna_name){
+	return 1;
+    }else{
+	return 0;
+    }
+}
+
+###################################################################
 # Return list of all dnas
 sub getAllDNAs{
 		
@@ -282,6 +324,27 @@ sub getDNAStatus{
     }
     
     return 1;
+}
+
+###################################################################
+# Return 1 or 0 if template is or is not a valid template for 
+# this study
+sub isValidTemplate{
+		
+=head2 int isValidTemplate(string templateName);
+
+	This function returns 1 or 0 if template is or is not a 
+	valid template for this study
+=cut
+    my $object = shift;
+    my $template_name = shift;
+    
+    if(defined $object->{'xml_hash'}->{'templateList'}->{'template'}->{$template_name} ||
+       $object->{'xml_hash'}->{'templateList'}->{'template'}->{'name'} eq $template_name){
+	return 1;
+    }else{
+	return 0;
+    }
 }
 
 ###################################################################
@@ -451,6 +514,16 @@ sub stutterReviewNavFile{
 	print STDERR "Stutter review should not take place for this study\n";
 	return 1;
     }
+}
+
+###################################################################
+# This is the destructor function
+sub DESTROY{
+		
+=head2  DESTROY();
+
+	This is the destructor function
+=cut
 }
 
 1;
