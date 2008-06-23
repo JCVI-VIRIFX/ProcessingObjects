@@ -36,7 +36,6 @@ use Data::Dumper;
 sub new{
     my $class = shift;
     my $object = {};
-    print STDOUT "Creating new study XML object\n";
     if(@_ == 1){
 
 	# Store input parameters
@@ -63,6 +62,7 @@ sub _initialize {
     $object->{'curr_template_count'} = 0;
     $object->{'curr_amplicon_count'} = 0;
     $object->{'curr_dna_count'} = 0;
+    $object->{'total_dna_count'} = 0;
 
     if($object->_loadXML()){
 	print STDERR "ERROR loading XML file\n";
@@ -86,11 +86,23 @@ sub _loadXML{
 	return 1;
     }
     
-    print "Reading XML file: $object->{'xml_file'}\n";
     my $xmlObj = new XML::Simple;
     $object->{'xml_hash'} = $xmlObj->XMLin($object->{'xml_file'}, KeyAttr=>'name', ContentKey => '-content');
     
     return 0;
+}
+
+###################################################################
+# Returns the study name 
+sub getStudy{
+		
+=head2 string getStudy();
+
+	This function returns the study name
+=cut
+    my $object = shift;
+
+    return $object->{'xml_hash'}->{'name'};
 }
 
 ###################################################################
@@ -125,7 +137,6 @@ sub getAllAmplicons{
     my $object = shift;
 
     my @amp_arr;
-    print STDOUT "Retrieving all amplicons\n";
     if(defined $object->{'xml_hash'}->{'ampliconList'}->{'amplicon'}->{'name'}){
 	push @amp_arr, $object->{'xml_hash'}->{'ampliconList'}->{'amplicon'}->{'name'};
     }else{
@@ -281,7 +292,6 @@ sub getAllDNAs{
     my $object = shift;
 
     my @dna_arr;
-    print STDOUT "Retrieving all DNAs\n";
     if(defined $object->{'xml_hash'}->{'dnaList'}->{'dna'}->{'name'}){
 	push @dna_arr, $object->{'xml_hash'}->{'dnaList'}->{'dna'}->{'name'};
     }else{
@@ -327,6 +337,41 @@ sub getDNAStatus{
 }
 
 ###################################################################
+# Returns true or false if the input array does or does not match
+# the complete set of DNAs for the study
+sub checkDNASetComplete{
+		
+=head2 string checkDNASetComplete(arrRef dnaArr);
+
+	Returns true or false if the input array does or does 
+	not match the complete set of DNAs for the study
+=cut
+    my $object = shift;
+    my $in_dna_arr_ref = shift;
+    
+    my @in_dna_arr = @{$in_dna_arr_ref};
+    if($#in_dna_arr < 0){
+	print STDERR "ERROR: input DNA array is empty\n";
+	return 1;
+    }
+    
+    my $dna_arr_ref = $object->getAllDNAs();
+    my @dna_arr = @{$dna_arr_ref};
+    my @sort_dna_arr = sort {$a <=> $b} @dna_arr;
+    my @sort_in_dna_arr = sort {$a <=> $b} @in_dna_arr;
+    if($#sort_dna_arr != $#sort_in_dna_arr){
+	return 'false';
+    }
+    for(my $i=0; $i<=$#sort_dna_arr; $i++){
+	if($sort_dna_arr[$i] ne $sort_in_dna_arr[$i]){
+	    return 'false';
+	}
+    }
+    
+    return 'true';
+}
+
+###################################################################
 # Return 1 or 0 if template is or is not a valid template for 
 # this study
 sub isValidTemplate{
@@ -358,7 +403,6 @@ sub getAllTemplates{
     my $object = shift;
 
     my @template_arr;
-    print STDOUT "Retrieving all templates\n";
     if(defined $object->{'xml_hash'}->{'templateList'}->{'template'}->{'name'}){
 	push @template_arr, $object->{'xml_hash'}->{'templateList'}->{'template'}->{'name'};
     }else{
