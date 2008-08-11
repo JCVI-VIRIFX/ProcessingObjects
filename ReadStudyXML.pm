@@ -357,8 +357,8 @@ sub checkDNASetComplete{
     
     my $dna_arr_ref = $object->getAllDNAs();
     my @dna_arr = @{$dna_arr_ref};
-    my @sort_dna_arr = sort {$a <=> $b} @dna_arr;
-    my @sort_in_dna_arr = sort {$a <=> $b} @in_dna_arr;
+    my @sort_dna_arr = sort {$a cmp $b} @dna_arr;
+    my @sort_in_dna_arr = sort {$a cmp $b} @in_dna_arr;
     if($#sort_dna_arr != $#sort_in_dna_arr){
 	return 'false';
     }
