@@ -306,6 +306,30 @@ sub getAllDNAs{
 }
 
 ###################################################################
+# Return list of all dnas
+sub getNumDNAs{
+
+=head2 int getNumDNAs();
+
+        This function returns the total number of DNAs
+=cut
+    my $object = shift;
+
+    my @dna_arr;
+    if(defined $object->{'xml_hash'}->{'dnaList'}->{'dna'}->{'name'}){
+        push @dna_arr, $object->{'xml_hash'}->{'dnaList'}->{'dna'}->{'name'};
+    }else{
+        @dna_arr = keys(%{$object->{'xml_hash'}->{'dnaList'}->{'dna'}});
+        if($#dna_arr < 1){
+            print STDERR "ERROR: returning DNA list\n";
+            return 1;
+        }
+    }
+
+    return $#dna_arr+1;
+}
+
+###################################################################
 # Return the status of a given dna
 sub getDNAStatus{
 		
