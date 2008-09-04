@@ -343,8 +343,8 @@ sub getPercentAmpliconCoverage{
       $bases_for_full_coverage = $ref_start_stutter;
     }
 
-    my $num_hsps = `$metrics_object->{'bl2seq'} -p blastn -F F -e 1e-10 -D 1 -i $metrics_object->{'pda_no_primers_fasta'} -j $metrics_object->{'fastafile'} | grep -v "^#" | wc -l`;
-    my @bl2seq_records = `$metrics_object->{'bl2seq'} -p blastn -F F -e 1e-10 -D 1 -i $metrics_object->{'pda_no_primers_fasta'} -j $metrics_object->{'fastafile'} | grep -v "^#"`;
+    my $num_hsps = `$metrics_object->{'bl2seq'} -p blastn -F F -e 1e-10 -D 1 -i $metrics_object->{'pda_no_primers_fasta'} -j $metrics_object->{'fastafile'} | grep -v "^\#" | wc -l`;
+    my @bl2seq_records = `$metrics_object->{'bl2seq'} -p blastn -F F -e 1e-10 -D 1 -i $metrics_object->{'pda_no_primers_fasta'} -j $metrics_object->{'fastafile'} | grep -v "^\#"`;
 
     if ($num_hsps > 0){
 	my($bl2seq, $direction) = "";
