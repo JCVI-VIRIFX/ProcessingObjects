@@ -103,7 +103,8 @@ sub new{
 	my $amplicons_dir = $reference_amplicons_dir;
 	$amplicons_dir =~ s/reference_amplicons\///g;
 	$object->{'pda_no_primers_fasta'} = $reference_amplicons_dir."/".$object->{'amplicon'}."_no_primers.fasta";
-	$object->{'pda_no_primers_length'} = `$config{'Emboss_Tools'}{'infoseq_exe'} $object->{'pda_no_primers_fasta'} -only -length`;
+	#$object->{'pda_no_primers_length'} = `$config{'Emboss_Tools'}{'infoseq_exe'} $object->{'pda_no_primers_fasta'} -only -length | tail -n 1 | tr -d`;
+	$object->{'pda_no_primers_length'} = `$config{'Emboss_Tools'}{'infoseq_exe'} $object->{'pda_no_primers_fasta'} -only -length | tail -n 1`;
 	$object->{'ref_amp_blastdb'} = $reference_amplicons_dir ."/".$config{'PrimerDesign_Info'}{'all_amplicons_file'};
 	$object->{'primer_info_file'} = $amplicons_dir."/".$config{'PrimerDesign_Info'}{'primer_info_file'};
 	my $primer_design_template_file = $amplicons_dir."/template.fasta";
@@ -537,7 +538,7 @@ sub getPercentPeakRatioAverage{
 # CALCULATE THE NUMBER OF BASES OF OPPOSITE STRAND PRIMING
 sub getNumBasesOppositeStrand{
     my $metrics_object = shift;
-    my $fuzznuc = "/usr/local/packages/EMBOSS-2.9.0/bin/fuzznuc";
+    my $fuzznuc =  $metrics_object->{'fuzznuc'}; #"/usr/local/packages/EMBOSS-2.9.0/bin/fuzznuc";
     my $fuzznuc_cmd = "";
     my $numBasesOppositeStrand = my $max_base = my $hit_max_base = 0;
     my $min_amp_length = 100;
@@ -559,13 +560,13 @@ sub getNumBasesOppositeStrand{
 	$fuzznuc_cmd = "$metrics_object->{'fuzznuc'}
 				 -sequence $metrics_object->{'fuzznuc_fasta'}
                                  -pattern $rev_comp_rev_primer
-                                 -mismatch 2
+                                 -pmismatch 2
                                  -outfile $metrics_object->{'fuzznuc_fasta'}.fuzznuc";
     }else{
 	$fuzznuc_cmd = "$metrics_object->{'fuzznuc'} 
 				 -sequence $metrics_object->{'fuzznuc_fasta'}
                                  -pattern $rev_comp_fwd_primer
-                                 -mismatch 2
+                                 -pmismatch 2
                                  -outfile $metrics_object->{'fuzznuc_fasta'}.fuzznuc";
     }
     $fuzznuc_cmd =~ s/\n/ /g;
