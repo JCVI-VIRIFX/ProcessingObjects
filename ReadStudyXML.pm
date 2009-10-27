@@ -58,7 +58,7 @@ sub _initialize {
     my $object = shift;
 
     # Initialize analysis variables
-    $object->{'xml_hash'};
+    #$object->{'xml_hash'} ="";
     $object->{'curr_template_count'} = 0;
     $object->{'curr_amplicon_count'} = 0;
     $object->{'curr_dna_count'} = 0;
