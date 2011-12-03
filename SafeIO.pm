@@ -3,8 +3,13 @@ package SafeIO;
 use strict;
 use warnings;
 use File::Copy;
+use File::Basename;
+use Cwd 'abs_path';
 use POSIX;
 use Carp;
+
+use constant DEFAULT_DIR_PERMISSIONS  => 0775;
+use constant DEFAULT_FILE_PERMISSIONS => 0644;
 
 our ($RETRY_NUM,$DELAY);
 
@@ -14,7 +19,7 @@ BEGIN {
     $VERSION = sprintf "%d", q$Revision: 313$ =~ /(\d+)/g;
     @ISA = qw(Exporter);
     @EXPORT = qw(mkdir_safe chdir_safe rmdir_safe unlink_safe symlink_safe
-                 copy_safe move_safe system_safe);
+                 copy_safe move_safe system_safe chmod_safe mk_tree_safe);
     $RETRY_NUM = 3;
     $DELAY = 1;
 }
@@ -60,6 +65,15 @@ sub move_safe($$) {
     my ($src,$dst) = @_;
     retry(sub {move @_}, ($src,$dst));
 }
+sub chmod_safe($$) {
+    my ($elem,$perm) = @_;
+    
+    unless (defined($perm)) {
+        $perm = -f $elem ? DEFAULT_FILE_PERMISSIONS : DEFAULT_DIR_PERMISSIONS;
+    } 
+    retry(sub {chmod, @_}, ($elem, $perm));
+}
+
 
 sub system_safe($) {
     my ($cmd) = @_;
@@ -76,6 +90,39 @@ sub system_safe($) {
     } else {
         croak "system call didn't exit, and didn't get signal. You figure out what happend.";
     }
+}
+
+=item   mk_tree_safe()
+
+my $success = mk_tree_safe($path);
+my $success = mk_tree_safe($path, $permissions);
+
+It recursively creates directories with either the default permissions of constant DEFAULT_DIR_PERMISSIONS or with the given numeric permission.
+It returns the number of directories created.
+
+=cut
+
+sub mk_tree_safe($;$) {
+    my ($dir, $perm) = @_;
+    my $created = 0;
+    $perm = DEFAULT_DIR_PERMISSIONS unless defined($perm);
+    my @creandae = ();
+    my $upper_dir = dirname($dir);
+    
+    while ($upper_dir ne $dir) { # Till we have elements in the path...
+        last if -e $dir;
+        push(@creandae, $dir);
+        $dir = $upper_dir;
+        $upper_dir = dirname($dir);
+    }
+    
+    for (my $n = $#creandae; $n >= 0; --$n) {
+        my $new_dir = $creandae[$n];
+        mkdir_safe($new_dir);
+        chmod_safe($new_dir, $perm);
+        ++$created;
+    }
+    return($created);
 }
 
 1;
