@@ -1,4 +1,4 @@
-package SafeIO;
+package ProcessingObjects::SafeIO;
 
 use strict;
 use warnings;
