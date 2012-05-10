@@ -68,6 +68,7 @@ Note: if you need to create more levels of directory at once or to set permissio
 
 sub mkdir_safe($;$) {
     my ($file,$mode) = @_;
+    return(1) if -d $file;
     retry(sub {defined $_[1] ? mkdir $_[0],$_[1] : mkdir $_[0]}, ($file,$mode));
 }
 
@@ -193,6 +194,7 @@ my $success = mk_tree_safe($path, $permissions);
 
 It recursively creates directories with either the default permissions of constant DEFAULT_DIR_PERMISSIONS or with the given numeric permission.
 It returns the number of directories created.
+If the directory already exists and the permissions parameter has been specified, it tries to chamge permissions to the directory.
 
 E.g. mk_tree_safe('/usr/local/scratch/TMP_DIR', 0777) || die "Impossible to create the temprary directory\n\n";
 
@@ -203,6 +205,10 @@ sub mk_tree_safe($;$) {
     my $created = 0;
     $perm = DEFAULT_DIR_PERMISSIONS unless defined($perm);
     my @creandae = ();
+    if (-d $dir) { ## The directory already exists, attempting to change permissions
+        chmod_safe($dir, $perm) if defined($perm);
+        return(1);
+    }
     my $upper_dir = dirname($dir);
     
     while ($upper_dir ne $dir) { # Till we have elements in the path...
